@@ -1,0 +1,3 @@
+# Statera
+
+A Python project.
