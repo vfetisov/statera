@@ -1,3 +1,3 @@
 # Statera
 
-A Python project.
+Personal AI Career Assistant.
