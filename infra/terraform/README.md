@@ -61,6 +61,14 @@ terraform init
 terraform validate
 ```
 
+## Network Resources
+
+The configuration creates the following network resources:
+
+- **VPC Network** (`statera-network`) — the base VPC for the Statera project.
+- **Subnet** (`statera-subnet`) — a single subnet in the zone defined by `var.zone` with the CIDR block from `var.subnet_cidr` (default: `10.10.0.0/24`).
+- **Security Group** (`statera-postgres-sg`) — a security group for PostgreSQL with a default egress rule allowing all outbound IPv4 traffic. Inbound PostgreSQL rules will be added later.
+
 ## Previewing Infrastructure Changes
 
 ```bash

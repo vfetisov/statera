@@ -1,4 +1,6 @@
-cloud_id                 = "b1gj6mgjqitlu4vsvvvf
-folder_id                = "b1gai7o3vgbftgdabnvn"
+cloud_id                 = "b1gXXXXXXXXXXXXXXXXX"
+folder_id                = "b1gXXXXXXXXXXXXXXXXX"
 zone                     = "ru-central1-a"
-service_account_key_file = "C:\Users\mitho\.statera\statera_tf_key.json"
+service_account_key_file = "./key.json"
+subnet_cidr              = "10.10.0.0/24"
+network_id = "replace-with-existing-network-id"
