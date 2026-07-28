@@ -1,0 +1,4 @@
+cloud_id                 = "b1gj6mgjqitlu4vsvvvf
+folder_id                = "b1gai7o3vgbftgdabnvn"
+zone                     = "ru-central1-a"
+service_account_key_file = "C:\Users\mitho\.statera\statera_tf_key.json"
