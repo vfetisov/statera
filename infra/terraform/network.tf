@@ -18,4 +18,11 @@ resource "yandex_vpc_security_group" "postgres" {
     from_port      = -1
     to_port        = -1
   }
+
+  ingress {
+    description    = "Allow PostgreSQL from Statera servers"
+    protocol       = "TCP"
+    port           = 6432
+    v4_cidr_blocks = var.postgres_allowed_cidrs
+  }
 }

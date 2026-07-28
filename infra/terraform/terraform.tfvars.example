@@ -3,4 +3,8 @@ folder_id                = "b1gXXXXXXXXXXXXXXXXX"
 zone                     = "ru-central1-a"
 service_account_key_file = "./key.json"
 subnet_cidr              = "10.10.0.0/24"
-network_id = "replace-with-existing-network-id"
+network_id               = "replace-with-existing-network-id"
+
+postgres_allowed_cidrs = [
+  "203.0.113.25/32",
+]

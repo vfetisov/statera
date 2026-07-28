@@ -28,3 +28,16 @@ variable "network_id" {
   description = "Existing Yandex VPC network ID for Statera"
   type        = string
 }
+
+variable "postgres_allowed_cidrs" {
+  description = "Public IPv4 CIDRs allowed to connect to PostgreSQL"
+  type        = list(string)
+
+  validation {
+    condition = alltrue([
+      for cidr in var.postgres_allowed_cidrs :
+      can(cidrhost(cidr, 0))
+    ])
+    error_message = "Every postgres_allowed_cidrs item must be a valid IPv4 CIDR."
+  }
+}
