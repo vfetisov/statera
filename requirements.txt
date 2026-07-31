@@ -1,1 +1,8 @@
 # Statera dependencies
+
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg[binary]
+pydantic-settings
+pytest

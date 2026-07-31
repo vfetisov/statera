@@ -1,6 +1,7 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+*.pyc
 *$py.class
 
 # C extensions
@@ -105,6 +106,7 @@ celerybeat-schedule.db
 # Environments
 .env
 .venv
+.venv/
 env/
 venv/
 ENV/
@@ -140,3 +142,9 @@ cython_debug/
 .vscode/
 *.swp
 *.swo
+
+# Terraform
+infra/terraform/terraform.tfvars
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/.terraform/
