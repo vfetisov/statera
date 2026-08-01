@@ -21,6 +21,7 @@ from app.sources.linkedin.smoke import (
     extract_current_job_id,
     extract_job_id,
     parse_card_text,
+    parse_job_card_lines,
     read_saved_search,
     to_absolute_url,
 )
@@ -201,6 +202,111 @@ def test_parse_card_text_ignores_posted_line() -> None:
 def test_parse_card_text_returns_none_for_empty() -> None:
     assert parse_card_text("") == (None, None, None)
     assert parse_card_text("   \n  \n") == (None, None, None)
+
+
+# --- parse_job_card_lines --------------------------------------------------
+
+
+def test_parse_job_card_lines_title_company_remote_location() -> None:
+    lines = ["Technical Account Manager", "Globex Corp", "India (Remote)"]
+    assert parse_job_card_lines(lines) == (
+        "Technical Account Manager",
+        "Globex Corp",
+        "India (Remote)",
+    )
+
+
+def test_parse_job_card_lines_removes_verified_job() -> None:
+    lines = ["Senior Engineer", "(Verified job)", "Acme", "Remote"]
+    title, company, location = parse_job_card_lines(lines)
+    assert title == "Senior Engineer"
+    assert company == "Acme"
+    assert location == "Remote"
+    assert "Verified job" not in (company or "")
+    assert "Verified job" not in (location or "")
+
+
+def test_parse_job_card_lines_duplicate_title_line() -> None:
+    lines = ["Staff Engineer", "Staff Engineer", "Acme", "Remote"]
+    title, company, location = parse_job_card_lines(lines)
+    assert title == "Staff Engineer"
+    assert company == "Acme"
+    assert location == "Remote"
+
+
+def test_parse_job_card_lines_removes_metadata() -> None:
+    lines = [
+        "Data Engineer",
+        "Acme",
+        "Remote",
+        "Posted 2 days ago",
+        "Easy Apply",
+        "Promoted",
+    ]
+    title, company, location = parse_job_card_lines(lines)
+    assert title == "Data Engineer"
+    assert company == "Acme"
+    assert location == "Remote"
+    assert "Posted" not in (company or "")
+    assert "Posted" not in (location or "")
+
+
+def test_parse_job_card_lines_rejects_punctuation_location() -> None:
+    lines = ["Senior Technical Account Manager", "Acme", "·"]
+    title, company, location = parse_job_card_lines(lines)
+    assert company == "Acme"
+    assert location is None
+
+
+def test_parse_job_card_lines_company_not_equal_title() -> None:
+    lines = ["Technical Account Manager", "Technical Account Manager", "India (Remote)"]
+    title, company, location = parse_job_card_lines(lines)
+    assert title == "Technical Account Manager"
+    assert company is None
+    assert location == "India (Remote)"
+
+
+def test_parse_job_card_lines_location_not_equal_title_or_company() -> None:
+    lines = [
+        "Sr. Director, Customer Success Operations",
+        "ORBCOMM",
+        "Sr. Director, Customer Success Operations",
+        "Remote · United States",
+    ]
+    title, company, location = parse_job_card_lines(lines)
+    assert title == "Sr. Director, Customer Success Operations"
+    assert company == "ORBCOMM"
+    assert location == "Remote · United States"
+    assert location != title
+    assert location != company
+
+
+def test_parse_job_card_lines_orbcomm_example() -> None:
+    lines = [
+        "Sr. Director, Customer Success Operations",
+        "ORBCOMM",
+        "Remote · United States",
+    ]
+    title, company, location = parse_job_card_lines(lines)
+    assert title == "Sr. Director, Customer Success Operations"
+    assert company == "ORBCOMM"
+    assert location == "Remote · United States"
+
+
+def test_parse_job_card_lines_missing_company() -> None:
+    lines = ["Staff Engineer", "Remote"]
+    title, company, location = parse_job_card_lines(lines)
+    assert title == "Staff Engineer"
+    assert company is None
+    assert location == "Remote"
+
+
+def test_parse_job_card_lines_missing_location() -> None:
+    lines = ["Staff Engineer", "Acme Corp"]
+    title, company, location = parse_job_card_lines(lines)
+    assert title == "Staff Engineer"
+    assert company == "Acme Corp"
+    assert location is None
 
 
 # --- canonical_job_url -----------------------------------------------------

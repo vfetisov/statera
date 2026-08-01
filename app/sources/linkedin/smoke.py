@@ -39,7 +39,7 @@ _LOGIN_PREFIXES = (
 
 _JOB_ID_RE = re.compile(r"/jobs/view/(\d+)")
 
-# Shallow, defensive selectors used to read the selected-job details panel.
+# Shallow, defensive selectors used to read the selected-job details pane.
 _DETAILS_TITLE_SELECTORS = (
     "h1",
     'h2[class*="job-title"]',
@@ -49,12 +49,33 @@ _DETAILS_COMPANY_SELECTORS = (
     'a[class*="company-name"]',
     'span[class*="company-name"]',
     'a[href*="/company/"]',
+    'span[class*="top-card-layout__second-subline"]',
 )
 _DETAILS_LOCATION_SELECTORS = (
     'span[class*="location"]',
     'div[class*="location"]',
-    'li[class*="job-card-container__metadata-item"]',
+    'span[class*="bullet"]',
+    'span[class*="top-card-layout__tertiary-info"]',
 )
+
+# JS: locate the selected-job details pane — an element with a job heading and
+# substantial text, outside the page header/navigation.
+_FIND_DETAILS_PANE_JS = r"""() => {
+  const headings = Array.from(document.querySelectorAll('h1, h2'));
+  for (const heading of headings) {
+    const text = (heading.innerText || '').trim();
+    if (!text || text.length < 4) continue;
+    if (heading.closest('header, nav')) continue;
+    let node = heading;
+    for (let i = 0; i < 8 && node; i++) {
+      if (node !== document.body && node !== document.documentElement) {
+        if ((node.innerText || '').length > 200) return node;
+      }
+      node = node.parentElement;
+    }
+  }
+  return null;
+}"""
 
 # JS: find the scrollable jobs-list container. Prefers an element that scrolls
 # vertically, contains several clickable card candidates and several title-like
@@ -279,12 +300,31 @@ def deduplicate(previews: list[LinkedInJobPreview]) -> list[LinkedInJobPreview]:
     return unique
 
 
+_TITLE_LINE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ,.:()&\-/'+]{3,119}$")
 _PLACE_LINE_RE = re.compile(
     r"^[A-Za-z][A-Za-z .\-']*(?:,\s*[A-Za-z][A-Za-z .\-']*){1,3}$"
 )
-_TITLE_LINE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ,.:()&\-/'+]{3,119}$")
+_PUNCTUATION_ONLY_RE = re.compile(r"^[\W_]+$")
+_POSTING_AGE_RE = re.compile(
+    r"^(?:active\s+)?\d+\s+"
+    r"(day|days|week|weeks|month|months|hour|hours|minute|minutes)\s+ago$",
+    re.IGNORECASE,
+)
 _COMPANY_SUFFIXES = {"inc", "inc.", "ltd", "llc", "corp", "gmbh", "sa", "bv"}
-_LOCATION_WORDS = ("remote", "hybrid", "on-site", "on site", "united states")
+_WORK_MODE_WORDS = ("remote", "hybrid", "on-site")
+_WORK_MODE_SUFFIXES = ("(remote)", "(hybrid)", "(on-site)")
+_STANDALONE_SEPARATORS = ("·", "•", "|")
+_METADATA_PREFIXES = (
+    "posted",
+    "promoted",
+    "actively recruiting",
+    "actively reviewing",
+    "easy apply",
+    "viewed",
+    "applied",
+    "saved",
+    "be an early applicant",
+)
 
 
 def _looks_like_title(line: str) -> bool:
@@ -298,12 +338,42 @@ def _looks_like_title(line: str) -> bool:
     return bool(_TITLE_LINE_RE.match(line))
 
 
-def _looks_like_location(line: str) -> bool:
+def _normalize_line(line: str) -> str:
+    """Collapse repeated whitespace and trim a line."""
+    return re.sub(r"\s+", " ", line).strip()
+
+
+def _strip_verified(line: str) -> str:
+    """Remove the '(Verified job)' presentational suffix."""
+    return re.sub(r"\s*\(Verified job\)\s*", "", line).strip()
+
+
+def _is_metadata(line: str) -> bool:
+    """True for metadata lines that must not become title/company/location."""
+    lower = line.lower()
+    return any(
+        lower == prefix or lower.startswith(prefix) for prefix in _METADATA_PREFIXES
+    )
+
+
+def _is_separator(line: str) -> bool:
+    return line in _STANDALONE_SEPARATORS
+
+
+def _is_punctuation_only(line: str) -> bool:
+    return bool(line) and bool(_PUNCTUATION_ONLY_RE.match(line))
+
+
+def _looks_like_posting_age(line: str) -> bool:
+    return bool(_POSTING_AGE_RE.match(line.strip()))
+
+
+def _looks_like_location_line(line: str) -> bool:
     """Heuristic: does a line read like a location rather than a company?"""
     lower = line.lower()
-    if "·" in line:
+    if any(word in lower for word in _WORK_MODE_WORDS):
         return True
-    if any(word in lower for word in _LOCATION_WORDS):
+    if "·" in line:
         return True
     if not _PLACE_LINE_RE.match(line.strip()):
         return False
@@ -311,55 +381,90 @@ def _looks_like_location(line: str) -> bool:
     return last not in _COMPANY_SUFFIXES
 
 
-def parse_card_text(text: str) -> tuple[str | None, str | None, str | None]:
-    """Parse normalized card text into (title, company, location).
+def _apply_preview_safeguards(
+    title: str | None,
+    company: str | None,
+    location: str | None,
+) -> tuple[str | None, str | None, str | None]:
+    """Drop low-confidence company/location values before returning."""
+    if company and company == title:
+        company = None
+    if location and location == title:
+        location = None
+    if location and location == company:
+        location = None
+    if location and _is_punctuation_only(location):
+        location = None
+    return title, company, location
 
-    Defensive heuristics:
-    - presentational markers such as "(Verified job)" / "Verified job" are
-      removed;
-    - lines beginning with "Posted" are ignored;
-    - the first remaining line is the title;
-    - a later line that looks like a location becomes the location;
-    - the first remaining line after the title that is not the location is the
-      company;
-    - fields that cannot be determined confidently are returned as None.
+
+def parse_job_card_lines(
+    lines: list[str],
+) -> tuple[str | None, str | None, str | None]:
+    """Parse normalized card lines into (title, company, location).
+
+    Normalizes each line (trim, collapse whitespace, drop empty lines and
+    standalone separators, drop duplicate adjacent lines), strips "(Verified
+    job)" markers, ignores metadata lines, and then picks:
+
+    - title: the first meaningful line;
+    - location: the first line that looks like a location;
+    - company: the first remaining line that is not the title, location,
+      metadata, punctuation-only, work-mode-suffixed, or a posting-age line.
+
+    Confidence safeguards are applied before returning.
     """
-    if not text:
+    normalized: list[str] = []
+    for raw_line in lines:
+        line = _normalize_line(raw_line)
+        line = _strip_verified(line)
+        if not line or _is_separator(line):
+            continue
+        normalized.append(line)
+
+    # Remove duplicate adjacent lines.
+    cleaned: list[str] = []
+    for line in normalized:
+        if not cleaned or cleaned[-1] != line:
+            cleaned.append(line)
+
+    meaningful = [line for line in cleaned if not _is_metadata(line)]
+    if not meaningful:
         return (None, None, None)
 
-    lines: list[str] = []
-    for raw_line in text.splitlines():
-        line = " ".join(raw_line.split())
-        line = re.sub(r"\s*\(Verified job\)\s*", "", line).strip()
-        if not line:
-            continue
-        lower = line.lower()
-        if lower in ("verified job", "promoted", "promoted job"):
-            continue
-        if lower.startswith("posted"):
-            continue
-        lines.append(line)
-
-    if not lines:
-        return (None, None, None)
-
-    title = lines[0]
+    title = meaningful[0]
     if len(title) < 2:
         return (None, None, None)
 
+    rest = [line for line in meaningful[1:] if line != title]
+
     location: str | None = None
-    for line in lines[1:]:
-        if _looks_like_location(line):
+    for line in rest:
+        if _looks_like_location_line(line):
             location = line
             break
 
     company: str | None = None
-    for line in lines[1:]:
-        if line != location:
-            company = line
-            break
+    for line in rest:
+        if line == location:
+            continue
+        if _is_punctuation_only(line):
+            continue
+        if line.lower().endswith(_WORK_MODE_SUFFIXES):
+            continue
+        if _looks_like_posting_age(line):
+            continue
+        if _looks_like_location_line(line):
+            continue
+        company = line
+        break
 
-    return title, company, location
+    return _apply_preview_safeguards(title, company, location)
+
+
+def parse_card_text(text: str) -> tuple[str | None, str | None, str | None]:
+    """Compatibility wrapper: parse a multiline string of card text."""
+    return parse_job_card_lines(text.splitlines())
 
 
 def _is_login_page(url: str) -> bool:
@@ -444,29 +549,53 @@ def _wait_for_job_id(page, previous_id: str | None) -> str | None:
     return current
 
 
-def _details_panel_fields(page) -> tuple[str | None, str | None, str | None]:
-    """Best-effort title/company/location from the selected-job details panel."""
+def _details_pane(page):
+    """Return the selected-job details pane element handle, or None."""
+    return page.evaluate_handle(_FIND_DETAILS_PANE_JS).as_element()
+
+
+def _details_pane_fields(details) -> tuple[str | None, str | None, str | None]:
+    """Best-effort title/company/location scoped to the details pane."""
     return (
-        _first_text(page, _DETAILS_TITLE_SELECTORS),
-        _first_text(page, _DETAILS_COMPANY_SELECTORS),
-        _first_text(page, _DETAILS_LOCATION_SELECTORS),
+        _first_text(details, _DETAILS_TITLE_SELECTORS),
+        _first_text(details, _DETAILS_COMPANY_SELECTORS),
+        _first_text(details, _DETAILS_LOCATION_SELECTORS),
     )
 
 
-def _extract_preview(
-    page, candidate
+def _details_pane_text(details) -> str:
+    """Normalized text of the details pane, limited to 500 characters."""
+    return " ".join(details.inner_text().split())[:500]
+
+
+def _extract_fields(
+    card_lines: list[str], details
 ) -> tuple[str | None, str | None, str | None]:
-    """Extract title/company/location from the card, falling back to details."""
-    title, company, location = parse_card_text("\n".join(_card_lines(candidate)))
-    if title is None or company is None or location is None:
-        details = _details_panel_fields(page)
-        title = title or details[0]
-        company = company or details[1]
-        location = location or details[2]
-    return title, company, location
+    """Combine card parsing with details-pane fallback."""
+    title, company, location = parse_job_card_lines(card_lines)
+    if details is not None:
+        details_title, details_company, details_location = _details_pane_fields(details)
+        title = title or details_title
+        company = company or details_company
+        location = location or details_location
+    return _apply_preview_safeguards(title, company, location)
 
 
-def _process_candidate(page, candidate) -> LinkedInJobPreview | None:
+def _debug_card_text(external_id: str, card_lines: list[str], details) -> None:
+    """Print raw card/details text for debugging (no cookies/tokens)."""
+    print(f"card text for job {external_id}:", file=sys.stderr)
+    for line in card_lines:
+        print(f"  {line}", file=sys.stderr)
+    if details is not None:
+        print(
+            f"details text for job {external_id}: {_details_pane_text(details)}",
+            file=sys.stderr,
+        )
+
+
+def _process_candidate(
+    page, candidate, dump_dom: bool = False
+) -> LinkedInJobPreview | None:
     """Click a card, wait for the URL job id, and build a preview, else None."""
     previous_id = _job_id_from_url(page.url)
     try:
@@ -484,7 +613,13 @@ def _process_candidate(page, candidate) -> LinkedInJobPreview | None:
     except Exception:
         pass
 
-    title, company, location = _extract_preview(page, candidate)
+    card_lines = _card_lines(candidate)
+    details = _details_pane(page)
+
+    if dump_dom:
+        _debug_card_text(external_id, card_lines, details)
+
+    title, company, location = _extract_fields(card_lines, details)
     return LinkedInJobPreview(
         external_id=external_id,
         title=title,
@@ -693,7 +828,9 @@ def read_saved_search(
                     for candidate in unseen:
                         if len(previews) >= limit:
                             break
-                        preview = _process_candidate(page, candidate)
+                        preview = _process_candidate(
+                            page, candidate, dump_dom=dump_dom
+                        )
                         if preview is None or preview.external_id in processed_ids:
                             continue
                         processed_ids.add(preview.external_id)
