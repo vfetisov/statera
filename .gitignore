@@ -148,3 +148,14 @@ infra/terraform/terraform.tfvars
 infra/terraform/*.tfstate
 infra/terraform/*.tfstate.*
 infra/terraform/.terraform/
+
+# LinkedIn browser storage state (authenticated session data — never commit)
+!var/
+var/*
+!var/playwright/
+var/playwright/*
+!var/playwright/.gitkeep
+
+# LinkedIn diagnostic DOM dumps (may contain personal account data — never commit)
+var/playwright/linkedin-search-page.html
+var/playwright/linkedin-search-page.png

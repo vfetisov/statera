@@ -20,5 +20,11 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     DATABASE_URL: str
 
+    # LinkedIn
+    LINKEDIN_STORAGE_STATE: str = "var/playwright/linkedin-storage-state.json"
+    LINKEDIN_SEARCH_URL: str | None = None
+    LINKEDIN_DEBUG_PAUSE: bool = False
+    LINKEDIN_DUMP_DOM: bool = False
+
 
 settings = Settings()
