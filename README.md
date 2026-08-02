@@ -94,3 +94,52 @@ FROM vacancies v
 LEFT JOIN companies c ON c.id = v.company_id
 ORDER BY v.first_seen_at DESC;
 ```
+
+## LinkedIn full description fetch
+
+Fetch the current job description for LinkedIn vacancies that do not yet have
+one, and store it (one `vacancy_contents` row per vacancy, version always 1).
+
+```bash
+source .venv/bin/activate
+vi .env
+```
+
+Recommended settings in `.env`:
+
+```
+LINKEDIN_DEBUG_PAUSE=false
+LINKEDIN_DUMP_DOM=false
+LINKEDIN_DESCRIPTION_FETCH_LIMIT=5
+```
+
+Run:
+
+```bash
+python scripts/linkedin_fetch_descriptions.py
+```
+
+- Only LinkedIn vacancies without a current description are selected.
+- The default batch size is 5.
+- Only the current description is stored.
+- `version` stays equal to 1.
+- Repeated identical descriptions are not duplicated.
+- No LLM analysis is performed.
+- No applications are submitted.
+
+SQL verification example:
+
+```sql
+SELECT
+    v.external_id,
+    v.title,
+    c.name AS company,
+    vc.version,
+    length(vc.raw_text) AS description_length,
+    vc.content_hash,
+    vc.fetched_at
+FROM vacancies v
+JOIN vacancy_contents vc ON vc.vacancy_id = v.id
+LEFT JOIN companies c ON c.id = v.company_id
+ORDER BY vc.fetched_at DESC;
+```

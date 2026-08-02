@@ -1,5 +1,6 @@
 """Application configuration loaded from environment variables and .env file."""
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +26,7 @@ class Settings(BaseSettings):
     LINKEDIN_SEARCH_URL: str | None = None
     LINKEDIN_DEBUG_PAUSE: bool = False
     LINKEDIN_DUMP_DOM: bool = False
+    LINKEDIN_DESCRIPTION_FETCH_LIMIT: int = Field(default=5, ge=1, le=20)
 
 
 settings = Settings()
