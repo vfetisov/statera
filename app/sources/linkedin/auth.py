@@ -44,6 +44,18 @@ def _is_authenticated_url(url: str) -> bool:
     return _is_linkedin_url(url) and not _is_auth_url(url)
 
 
+def _launch_login_browser(playwright):
+    """Launch Chromium for manual login.
+
+    Manual login is ALWAYS headed: it needs a visible GUI window so the user
+    can complete LinkedIn's interactive sign-in and pass any challenge. The
+    ``PLAYWRIGHT_HEADLESS`` production setting is deliberately ignored here —
+    headless jobs never log in automatically and simply fail with
+    ``LinkedInAuthenticationRequired`` when the session expires.
+    """
+    return playwright.chromium.launch(headless=False)
+
+
 def _select_authenticated_page(context) -> object | None:
     """Return the first open page that looks authenticated, else None."""
     for candidate in context.pages:
@@ -87,7 +99,7 @@ def save_linkedin_storage_state(storage_state_path: Path) -> None:
     storage_state_path.parent.mkdir(parents=True, exist_ok=True)
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = _launch_login_browser(p)
         context = browser.new_context()
         page = context.new_page()
         try:

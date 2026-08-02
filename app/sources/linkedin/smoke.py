@@ -16,6 +16,14 @@ from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import sync_playwright
 
+from app.sources.linkedin.browser import (
+    LinkedInAuthenticationRequired,
+    LinkedInBrowserOptions,
+    create_linkedin_browser_context,
+    is_linkedin_authentication_url,
+    validate_headless_debug_settings,
+)
+
 # ---------------------------------------------------------------------------
 # LinkedIn-specific selectors and URL constants.
 #
@@ -29,13 +37,6 @@ LINKEDIN_JOB_VIEW_PATH = "/jobs/view/"
 
 # Candidate selector: clickable elements that can represent a whole job card.
 _CANDIDATE_SELECTOR = 'button, [role="button"], [tabindex="0"], li'
-
-# URL prefixes that indicate LinkedIn sent the user to an auth page.
-_LOGIN_PREFIXES = (
-    "https://www.linkedin.com/login",
-    "https://www.linkedin.com/uas/login",
-    "https://www.linkedin.com/checkpoint",
-)
 
 _JOB_ID_RE = re.compile(r"/jobs/view/(\d+)")
 
@@ -467,10 +468,6 @@ def parse_card_text(text: str) -> tuple[str | None, str | None, str | None]:
     return parse_job_card_lines(text.splitlines())
 
 
-def _is_login_page(url: str) -> bool:
-    return url.startswith(_LOGIN_PREFIXES)
-
-
 def _first_text(handle, selectors: tuple[str, ...]) -> str | None:
     """Return the collapsed inner text of the first matching child, if any."""
     for selector in selectors:
@@ -713,6 +710,7 @@ def read_saved_search(
     limit: int = 10,
     debug_pause: bool = False,
     dump_dom: bool = False,
+    headless: bool = False,
 ) -> list[LinkedInJobPreview]:
     """Open a LinkedIn saved-search URL and read visible job cards.
 
@@ -721,37 +719,39 @@ def read_saved_search(
     read the job id from the URL and the preview fields from the card. Bounded
     scrolling (at most ``MAX_SCROLL_ROUNDS`` rounds) reveals more cards.
 
-    When ``debug_pause`` is true, the browser is kept open after extraction and
-    the function waits for Enter in the terminal before closing it, so the
-    loaded page can be inspected manually.
+    ``headless`` controls Chromium execution (local debugging: false, Ubuntu
+    production: true). When ``debug_pause`` is true, the browser is kept open
+    after extraction and the function waits for Enter in the terminal before
+    closing it, so the loaded page can be inspected manually — this is rejected
+    in headless mode.
 
     When ``dump_dom`` is true, the page HTML and a full-page screenshot are
     saved next to the storage state and diagnostic DOM info is printed to help
     inspect LinkedIn's markup.
 
-    Raises a clear error if the storage state file is missing or if LinkedIn
-    redirects to a login page.
+    Raises ``LinkedInAuthenticationRequired`` when the session has expired,
+    and a clear error if the storage state file is missing.
     """
+    validate_headless_debug_settings(headless, debug_pause)
     storage_state_path = Path(storage_state_path)
-    if not storage_state_path.is_file():
-        raise FileNotFoundError(
-            f"LinkedIn storage state not found: {storage_state_path}. "
-            "Run `python scripts/linkedin_login.py` first to authenticate."
-        )
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        context = browser.new_context(storage_state=str(storage_state_path))
+        browser, context = create_linkedin_browser_context(
+            p,
+            LinkedInBrowserOptions(
+                headless=headless,
+                storage_state_path=storage_state_path,
+            ),
+        )
         page = context.new_page()
         try:
             page.goto(search_url, wait_until="domcontentloaded")
             page.wait_for_load_state("domcontentloaded")
 
-            if _is_login_page(page.url) or page.locator("#username").count() > 0:
-                raise RuntimeError(
-                    "LinkedIn redirected to a login/authentication page. "
-                    "Re-authenticate by running `python scripts/linkedin_login.py`."
-                )
+            if is_linkedin_authentication_url(page.url) or (
+                page.locator("#username").count() > 0
+            ):
+                raise LinkedInAuthenticationRequired()
 
             # Wait for the first card-like element; the list may be lazy-loaded.
             try:

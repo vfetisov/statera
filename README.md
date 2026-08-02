@@ -143,3 +143,58 @@ JOIN vacancy_contents vc ON vc.vacancy_id = v.id
 LEFT JOIN companies c ON c.id = v.company_id
 ORDER BY vc.fetched_at DESC;
 ```
+
+## Headless production (Ubuntu)
+
+Manual LinkedIn login always runs **headed** on a machine with a GUI. All other
+LinkedIn browser flows (smoke reader, ingestion, description fetching, headless
+check) are configurable via `PLAYWRIGHT_HEADLESS`:
+
+- local debugging: `PLAYWRIGHT_HEADLESS=false`
+- Ubuntu production: `PLAYWRIGHT_HEADLESS=true`
+
+Production configuration example (`.env`):
+
+```
+APP_ENV=production
+PLAYWRIGHT_HEADLESS=true
+LINKEDIN_DEBUG_PAUSE=false
+LINKEDIN_DUMP_DOM=false
+LINKEDIN_DESCRIPTION_FETCH_LIMIT=5
+```
+
+`LINKEDIN_DEBUG_PAUSE=true` is rejected in headless mode: interactive pause
+needs a GUI and would hang a headless job.
+
+### Ubuntu Playwright installation
+
+```bash
+python -m playwright install --with-deps chromium
+```
+
+This installs Chromium and the required Linux system dependencies. No desktop
+environment and no X server are required for headless operation.
+
+### Secure storage-state deployment
+
+The authenticated storage-state file is created manually on macOS by
+`python scripts/linkedin_login.py`. Copy it to the Ubuntu server and restrict
+permissions:
+
+```bash
+scp var/playwright/linkedin-storage-state.json user@server:/opt/statera/var/playwright/
+```
+
+On Ubuntu:
+
+```bash
+chmod 600 /opt/statera/var/playwright/linkedin-storage-state.json
+```
+
+- The file provides authenticated access to LinkedIn.
+- It must never be committed or shared.
+- It must be readable only by the Statera service user.
+- When the session expires, recreate it manually on macOS and copy it again.
+
+Headless jobs never log in automatically; an expired session fails clearly with
+`LinkedInAuthenticationRequired`.

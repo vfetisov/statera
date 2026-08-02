@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.db.models.job_source import JobSource
 from app.db.models.vacancy import Vacancy
 from app.db.models.vacancy_content import VacancyContent
+from app.sources.linkedin.browser import validate_headless_debug_settings
 from app.sources.linkedin.description import (
     LinkedInJobDescription,
     calculate_content_hash,
@@ -134,13 +135,20 @@ def fetch_missing_vacancy_descriptions(
     storage_state_path: Path,
     limit: int = 5,
     debug_pause: bool = False,
+    headless: bool = False,
 ) -> VacancyDescriptionBatchResult:
     """Fetch descriptions for LinkedIn vacancies missing content.
 
     Each vacancy is processed in its own savepoint so a single failure does
     not roll back successful vacancies. The caller owns the outer transaction
     and commit; this function never commits or closes the session.
+
+    ``headless`` is passed through to the description fetcher. Interactive
+    ``debug_pause`` is rejected up front in headless mode (it would hang a
+    headless job) rather than being counted as a per-vacancy failure.
     """
+    validate_headless_debug_settings(headless, debug_pause)
+
     vacancies = _select_vacancies_for_description_fetch(db, limit)
     result = VacancyDescriptionBatchResult(selected=len(vacancies))
 
@@ -151,6 +159,7 @@ def fetch_missing_vacancy_descriptions(
                     external_id=vacancy.external_id,
                     storage_state_path=storage_state_path,
                     debug_pause=debug_pause,
+                    headless=headless,
                 )
                 upsert = upsert_current_vacancy_content(db, vacancy, description)
         except Exception as exc:

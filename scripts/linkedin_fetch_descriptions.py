@@ -40,6 +40,7 @@ def main() -> int:
             storage_state_path=storage_state,
             limit=limit,
             debug_pause=settings.LINKEDIN_DEBUG_PAUSE,
+            headless=settings.PLAYWRIGHT_HEADLESS,
         )
         db.commit()
     except Exception as exc:

@@ -14,10 +14,15 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-LINKEDIN_JOB_VIEW_URL = "https://www.linkedin.com/jobs/view/{external_id}/"
+from app.sources.linkedin.browser import (
+    LinkedInAuthenticationRequired,
+    LinkedInBrowserOptions,
+    create_linkedin_browser_context,
+    is_linkedin_authentication_url,
+    validate_headless_debug_settings,
+)
 
-# URL fragments that indicate the user is not on an authenticated page.
-_AUTH_FRAGMENTS = ("/login", "/uas/login", "/checkpoint", "/authwall", "/challenge")
+LINKEDIN_JOB_VIEW_URL = "https://www.linkedin.com/jobs/view/{external_id}/"
 
 # Minimum accepted length for a real job description.
 _MIN_DESCRIPTION_CHARS = 200
@@ -167,10 +172,6 @@ def validate_job_description(external_id: str, text: str) -> None:
         )
 
 
-def _is_auth_page(url: str) -> bool:
-    return any(fragment in url for fragment in _AUTH_FRAGMENTS)
-
-
 def _click_show_more(page, root) -> None:
     """Click a 'Show more' button inside the description area once, if present."""
     for button in root.query_selector_all("button"):
@@ -189,40 +190,42 @@ def fetch_linkedin_job_description(
     external_id: str,
     storage_state_path: Path,
     debug_pause: bool = False,
+    headless: bool = False,
 ) -> LinkedInJobDescription:
     """Fetch the full visible job description for one LinkedIn vacancy.
 
-    Uses the existing authenticated Playwright storage state and the same
-    headed Chromium configuration as the LinkedIn collector. Raises a clear
-    error when authentication is required or the description cannot be
-    validated. Does not click Apply, paginate, or open other vacancies.
+    Uses the existing authenticated Playwright storage state and the shared
+    Chromium configuration (``headless`` controls headed vs. headless). Raises
+    ``LinkedInAuthenticationRequired`` when the session has expired, and a
+    clear error when the description cannot be validated. Does not click
+    Apply, paginate, or open other vacancies.
     """
     external_id = str(external_id).strip()
     if not is_valid_external_id(external_id):
         raise ValueError(f"invalid LinkedIn external id: {external_id!r}")
 
+    validate_headless_debug_settings(headless, debug_pause)
     storage_state_path = Path(storage_state_path)
-    if not storage_state_path.is_file():
-        raise FileNotFoundError(
-            f"LinkedIn storage state not found: {storage_state_path}. "
-            "Run `python scripts/linkedin_login.py` first to authenticate."
-        )
 
     url = canonical_job_url(external_id)
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-        context = browser.new_context(storage_state=str(storage_state_path))
+        browser, context = create_linkedin_browser_context(
+            p,
+            LinkedInBrowserOptions(
+                headless=headless,
+                storage_state_path=storage_state_path,
+            ),
+        )
         page = context.new_page()
         try:
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_load_state("domcontentloaded")
 
-            if _is_auth_page(page.url) or page.locator("#username").count() > 0:
-                raise RuntimeError(
-                    "LinkedIn requires authentication. "
-                    "Rerun `python scripts/linkedin_login.py`."
-                )
+            if is_linkedin_authentication_url(page.url) or (
+                page.locator("#username").count() > 0
+            ):
+                raise LinkedInAuthenticationRequired()
 
             # Wait for the job-description area to become available.
             try:

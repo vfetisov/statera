@@ -191,7 +191,7 @@ def test_multiple_content_rows_raise(session) -> None:
 # --- fetch_missing_vacancy_descriptions (selection + batch) -----------------
 
 
-def _fake_fetch(external_id, storage_state_path, debug_pause=False):
+def _fake_fetch(external_id, storage_state_path, debug_pause=False, headless=False):
     return _description(external_id, _long(f"description for {external_id}"))
 
 
@@ -274,7 +274,7 @@ def test_failed_fetch_keeps_previous_successes(session, monkeypatch) -> None:
     _vacancy(session, "2", source, search)
     _vacancy(session, "3", source, search)
 
-    def flaky_fetch(external_id, storage_state_path, debug_pause=False):
+    def flaky_fetch(external_id, storage_state_path, debug_pause=False, headless=False):
         if external_id == "2":
             raise RuntimeError("boom")
         return _description(external_id, _long(f"desc {external_id}"))

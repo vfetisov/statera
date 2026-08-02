@@ -46,6 +46,7 @@ def main() -> int:
             limit=DEFAULT_LIMIT,
             debug_pause=settings.LINKEDIN_DEBUG_PAUSE,
             dump_dom=settings.LINKEDIN_DUMP_DOM,
+            headless=settings.PLAYWRIGHT_HEADLESS,
         )
     except Exception as exc:
         print(

@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
 
     # LinkedIn
+    PLAYWRIGHT_HEADLESS: bool = False
     LINKEDIN_STORAGE_STATE: str = "var/playwright/linkedin-storage-state.json"
     LINKEDIN_SEARCH_URL: str | None = None
     LINKEDIN_DEBUG_PAUSE: bool = False
