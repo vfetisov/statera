@@ -49,3 +49,48 @@ Notes:
   session data. It must **never be committed or shared** — it is Git-ignored.
 - The smoke test only **reads currently visible** job cards. It does not apply
   to jobs, does not paginate, and does not write to the database.
+
+## LinkedIn ingestion
+
+Persist the smoke-test previews into PostgreSQL.
+
+```bash
+source .venv/bin/activate
+vi .env
+```
+
+Recommended values in `.env`:
+
+```
+LINKEDIN_DEBUG_PAUSE=false
+LINKEDIN_DUMP_DOM=false
+```
+
+Run:
+
+```bash
+python scripts/linkedin_ingest.py
+```
+
+- The script reads up to 10 currently available LinkedIn cards.
+- It creates or updates source/search/company/vacancy records.
+- It is safe to run repeatedly; repeated jobs are matched by LinkedIn external
+  ID.
+- It does not yet fetch the full job description.
+- It does not yet run LLM analysis.
+
+SQL verification example:
+
+```sql
+SELECT
+    v.external_id,
+    v.title,
+    c.name AS company,
+    v.location,
+    v.status,
+    v.first_seen_at,
+    v.last_seen_at
+FROM vacancies v
+LEFT JOIN companies c ON c.id = v.company_id
+ORDER BY v.first_seen_at DESC;
+```
