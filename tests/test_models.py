@@ -50,3 +50,31 @@ def test_analyses_contains_score_columns() -> None:
         "location_score",
     ):
         assert column in analyses.columns
+
+
+EXPECTED_ANALYSES_COLUMNS = {
+    "id",
+    "vacancy_id",
+    "vacancy_content_id",
+    "model",
+    "prompt_version",
+    "overall_score",
+    "technical_score",
+    "leadership_score",
+    "location_score",
+    "summary",
+    "strengths",
+    "weaknesses",
+    "risks",
+    "recommendation",
+    "created_at",
+    "updated_at",
+}
+
+
+def test_analyses_schema_is_unchanged() -> None:
+    """v3 scoring must not introduce eligibility columns or any schema change."""
+    analyses = Base.metadata.tables["analyses"]
+    assert {column.name for column in analyses.columns} == EXPECTED_ANALYSES_COLUMNS
+    for forbidden in ("eligibility", "geography_classification", "location_class"):
+        assert forbidden not in analyses.columns

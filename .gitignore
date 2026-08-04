@@ -159,3 +159,8 @@ var/playwright/*
 # LinkedIn diagnostic DOM dumps (may contain personal account data — never commit)
 var/playwright/linkedin-search-page.html
 var/playwright/linkedin-search-page.png
+
+# Private career documents (resume, brief, templates, rules — never commit)
+!var/private/
+var/private/*
+!var/private/.gitkeep

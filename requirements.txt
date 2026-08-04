@@ -6,4 +6,6 @@ sqlalchemy
 psycopg[binary]
 pydantic-settings
 playwright
+openai
+python-docx
 pytest
