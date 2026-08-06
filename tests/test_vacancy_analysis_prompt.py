@@ -75,6 +75,16 @@ def _request(include_scoring=True):
     return build_vacancy_analysis_request(context, "gpt-5-mini", "medium")
 
 
+def _request_v4():
+    context = build_vacancy_analysis_context(
+        _registry(),
+        _vacancy(),
+        _content(),
+        "vacancy-fit-v4",
+    )
+    return build_vacancy_analysis_request(context, "gpt-5-mini", "medium")
+
+
 def test_stable_delimiters_are_present():
     request = _request()
     user = request.messages[1].content
@@ -324,3 +334,129 @@ def test_full_mcb_and_jd_remain_untruncated():
 
     assert BRIEF_TEXT in user
     assert DESCRIPTION in user
+
+
+def test_v4_requests_russian_summary():
+    system = _request_v4().messages[0].content
+
+    assert "Профессиональное соответствие" in system
+    assert "Основные пробелы" in system
+    assert "Доступность вакансии" in system
+
+
+def test_v4_requests_russian_strengths_weaknesses_risks():
+    system = _request_v4().messages[0].content
+
+    assert "summary, strengths, weaknesses, risks" in system
+    assert "русском языке" in system
+
+
+def test_v4_summary_structure_is_documented_in_russian():
+    system = _request_v4().messages[0].content
+
+    assert "Профессиональное соответствие: ... Основные пробелы: ... Доступность вакансии: ..." in system
+    assert "три понятия должны оставаться различимыми" in system
+    # The English summary template must not be requested in v4.
+    assert "Professional fit: ... Main gaps: ... Eligibility: ..." not in system
+
+
+def test_v4_requests_russian_risks_categories():
+    system = _request_v4().messages[0].content
+
+    for risk in (
+        "Риск несоответствия роли",
+        "Риск технического пробела",
+        "Риск избыточной квалификации",
+        "Риск отсутствия коммерческого опыта",
+        "Риск по стране или праву на работу",
+        "Языковой риск",
+        "Риск по часовому поясу",
+    ):
+        assert risk in system
+
+
+def test_v4_geographic_wording_preserves_v3_classification():
+    system = _request_v4().messages[0].content
+
+    for wording in (
+        "Подтверждённое ограничение",
+        "Вероятное региональное ограничение",
+        "Доступность требует уточнения",
+        "Ограничений по местоположению не обнаружено",
+    ):
+        assert wording in system
+    for label in ("CONFIRMED_BLOCKER", "LIKELY_RESTRICTION", "UNRESOLVED", "COMPATIBLE"):
+        assert label in system
+
+
+def test_v4_json_field_names_unchanged():
+    system = _request_v4().messages[0].content
+
+    for field in (
+        "overall_score",
+        "technical_score",
+        "leadership_score",
+        "location_score",
+        "recommendation",
+        "summary",
+        "strengths",
+        "weaknesses",
+        "risks",
+    ):
+        assert field in system
+
+
+def test_v4_enum_values_unchanged():
+    system = _request_v4().messages[0].content
+
+    for value in ("strong_match", "consider", "weak_match", "reject"):
+        assert value in system
+
+
+def test_v4_score_semantics_identical_to_v3():
+    v3 = _request().messages[0].content
+    v4 = _request_v4().messages[0].content
+
+    for rule in (
+        "Geography must never change overall_score.",
+        "Geography must never change technical_score.",
+        "Geography must never change leadership_score.",
+        "overall_score means professional role fit before geographic eligibility",
+        "Do not give location_score=0 solely because the candidate lives in another country",
+    ):
+        assert rule in v3
+        assert rule in v4
+
+
+def test_v4_geography_excluded_from_professional_scores():
+    system = _request_v4().messages[0].content
+
+    assert "Geography must never change technical_score." in system
+    assert "Geography must never change leadership_score." in system
+    assert "Geography must never change overall_score." in system
+    assert "Location and legal constraints affect only location_score" in system
+
+
+def test_v4_anti_invention_rules_remain():
+    system = _request_v4().messages[0].content
+
+    assert "Do not invent" in system
+    assert "Use only facts supported by the Master Career Brief" in system
+    assert "Не выдумывайте факты" in system
+
+
+def test_v4_full_mcb_and_jd_remain_untruncated():
+    request = _request_v4()
+    user = request.messages[1].content
+
+    assert BRIEF_TEXT in user
+    assert DESCRIPTION in user
+    assert len(request.messages) == 2
+    assert request.metadata["prompt_version"] == "vacancy-fit-v4"
+
+
+def test_v4_keeps_technical_and_product_terms_in_english():
+    system = _request_v4().messages[0].content
+
+    for term in ("SaaS", "SRE", "SLA", "AWS", "Terraform", "Jira Service Management", "CDN", "API"):
+        assert term in system

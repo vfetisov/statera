@@ -540,6 +540,71 @@ def test_same_v3_analysis_is_idempotent(session):
     assert _analysis_count(session) == 1
 
 
+def test_v4_analysis_coexists_with_v3(session):
+    vacancy = _make_vacancy(session, "9651")
+    content = _make_content(session, vacancy)
+    _make_analysis(session, vacancy, content, "fake:gpt-5-mini", prompt_version="vacancy-fit-v3")
+
+    result, _ = _run(session, prompt_version="vacancy-fit-v4")
+    session.commit()
+
+    assert result.created == 1
+    assert _analysis_count(session) == 2
+    versions = set(
+        session.execute(
+            select(Analysis.prompt_version).distinct()
+        ).scalars()
+    )
+    assert versions == {"vacancy-fit-v3", "vacancy-fit-v4"}
+
+
+def test_v4_analysis_is_idempotent(session):
+    vacancy = _make_vacancy(session, "9652")
+    content = _make_content(session, vacancy)
+    _make_analysis(session, vacancy, content, "fake:gpt-5-mini", prompt_version="vacancy-fit-v4")
+
+    result, _ = _run(session, prompt_version="vacancy-fit-v4")
+    session.commit()
+
+    assert result.selected == 0
+    assert result.created == 0
+    assert _analysis_count(session) == 1
+
+
+def test_v4_does_not_modify_old_v3_rows(session):
+    vacancy = _make_vacancy(session, "9653")
+    content = _make_content(session, vacancy)
+    _make_analysis(
+        session,
+        vacancy,
+        content,
+        "fake:gpt-5-mini",
+        prompt_version="vacancy-fit-v3",
+    )
+    old = db_first_analysis(session)
+    old_summary = old.summary
+    old_scores = (
+        old.overall_score,
+        old.technical_score,
+        old.leadership_score,
+        old.location_score,
+    )
+
+    result, _ = _run(session, prompt_version="vacancy-fit-v4")
+    session.commit()
+
+    assert result.created == 1
+    loaded = session.get(Analysis, old.id)
+    assert loaded.prompt_version == "vacancy-fit-v3"
+    assert loaded.summary == old_summary
+    assert (
+        loaded.overall_score,
+        loaded.technical_score,
+        loaded.leadership_score,
+        loaded.location_score,
+    ) == old_scores
+
+
 def test_service_does_not_branch_on_provider(session):
     import inspect
 

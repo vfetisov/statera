@@ -1,0 +1,9 @@
+{% if location_score_explanation %}
+<details class="score-help">
+  <summary aria-label="Что означает «Доступность вакансии»">
+    <span class="help-glyph" aria-hidden="true">?</span>
+    <span class="help-caption">Что это</span>
+  </summary>
+  <p class="help-text">{{ location_score_explanation }}</p>
+</details>
+{% endif %}

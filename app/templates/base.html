@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Statera{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/css/app.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/vacancies">Statera</a>
+    <nav class="status-counts" aria-label="Счётчики статусов вакансий">
+      <a class="count-link" href="/vacancies?status=new">Новые <span class="count">{{ counts.new }}</span></a>
+      <a class="count-link" href="/vacancies?status=selected">Выбранные <span class="count">{{ counts.selected }}</span></a>
+      <a class="count-link" href="/vacancies?status=ignored">Исключённые <span class="count">{{ counts.ignored }}</span></a>
+      <a class="count-link" href="/vacancies?status=applied">Отклики отправлены <span class="count">{{ counts.applied }}</span></a>
+    </nav>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <script src="{{ url_for('static', path='/js/app.js') }}" defer></script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<article class="vacancy-card">
+  <div class="card-topline">
+    <span class="category-badge category-{{ item.category|lower }}" data-category="{{ item.category }}">{{ category_label(item.category) }}</span>
+    {% set status = item.status %}
+    {% include "vacancies/_status_badge.html" %}
+  </div>
+  <a class="card-title" href="/vacancies/{{ item.external_id }}">{{ item.title }}</a>
+  <div class="card-meta">
+    <span class="company">{{ item.company or "Компания не указана" }}</span>
+    <span class="location">{{ item.location or "Местоположение не указано" }}</span>
+  </div>
+  <div class="card-scores">
+    <div class="overall-score" title="{{ overall_score_label }}">
+      <span class="score-num">{{ item.overall_score }}</span>
+      <span class="score-label">{{ overall_score_compact_label }}</span>
+    </div>
+    <span class="score-pill" title="{{ technical_score_label }}">{{ item.technical_score }} {{ technical_score_compact_label }}</span>
+    <span class="score-pill" title="{{ leadership_score_label }}">{{ item.leadership_score }} {{ leadership_score_compact_label }}</span>
+    <span class="score-pill eligibility" title="{{ location_score_label }}">{{ item.location_score }} {{ location_score_compact_label }}</span>
+    {% include "vacancies/_location_help.html" %}
+  </div>
+  <p class="card-recommendation">Рекомендация: <strong data-recommendation="{{ item.recommendation }}">{{ recommendation_label(item.recommendation) }}</strong></p>
+  <p class="card-summary">{{ item.summary }}</p>
+  <div class="card-lists">
+    {% if item.strengths %}
+    <div class="card-list strengths">
+      <h4>Сильные стороны</h4>
+      <ul>
+        {% for strength in item.strengths[:2] %}<li>{{ strength }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    {% if item.weaknesses or item.risks %}
+    <div class="card-list gaps">
+      <h4>Основные пробелы</h4>
+      <ul>
+        {% for weakness in item.weaknesses[:1] %}<li>{{ weakness }}</li>{% endfor %}
+        {% for risk in item.risks[:1] %}<li>{{ risk }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+  <div class="card-footer">
+    <span class="first-seen">
+      {% if item.first_seen_at %}{{ item.first_seen_at.strftime('%Y-%m-%d') }}{% endif %}
+    </span>
+    <div class="actions">
+      {% for action, target_status in valid_actions(item.status) %}
+      <form method="post" action="/vacancies/{{ item.external_id }}/status" class="inline-form"
+        {% if target_status == 'applied' %}
+        data-confirm="{{ applied_confirm_message }}"
+        {% endif %}>
+        <input type="hidden" name="status" value="{{ target_status }}">
+        <input type="hidden" name="return_to" value="{{ return_to }}">
+        <button type="submit" class="btn {{ 'btn-primary' if target_status != 'ignored' else 'btn-secondary' }}">{{ action }}</button>
+      </form>
+      {% endfor %}
+      <a class="btn btn-link" href="/vacancies/{{ item.external_id }}">Подробнее</a>
+      <a class="btn btn-link" href="{{ item.source_url }}" target="_blank" rel="noopener">Открыть в LinkedIn</a>
+    </div>
+  </div>
+</article>

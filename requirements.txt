@@ -8,4 +8,6 @@ pydantic-settings
 playwright
 openai
 python-docx
+jinja2
+python-multipart
 pytest

@@ -536,3 +536,38 @@ failed.
 
 Batch summaries now include `retried` (second requests sent) and
 `recovered_after_retry` (vacancies successfully analyzed on the retry).
+
+## Web review interface
+
+A minimal read-only human-review web UI built on FastAPI + Jinja2. It shows
+analyzed vacancies (list + detail) and lets you change their review status
+via POST-only forms. No LLM calls and no LinkedIn data collection happen from
+HTTP requests, and there is **no authentication yet** — run it only on
+`127.0.0.1`.
+
+- **List** (`GET /vacancies`): status tabs (New / Selected / Ignored /
+  Applied / All), filters (category, recommendation, minimum overall score),
+  sorting (overall, leadership, technical, location, newest), pagination, and
+  per-status counts in the top bar. Category (PRIORITY / REVIEW /
+  LOW_PRIORITY / REJECT) is derived from the same `classify_scores` rules as
+  the shortlist.
+- **Detail** (`GET /vacancies/{external_id}`): full scores, recommendation,
+  summary, strengths / weaknesses / risks, and the job description
+  (collapsed, with a character count).
+- **Status mutation** (`POST /vacancies/{external_id}/status`): allowed
+  transitions are enforced server-side (`new → selected|ignored`,
+  `selected → new|ignored|applied`, `ignored → new|selected`,
+  `applied → selected`). Forbidden transitions return `409`. The applied
+  action is guarded by a client-side confirm dialog. After mutation the
+  server redirects with HTTP `303` to a safe local path (open-redirect
+  inputs fall back to the list page).
+- **Scores are never edited** from the web UI; analysis rows are read-only.
+
+Run locally:
+
+```bash
+uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Then open <http://127.0.0.1:8000/vacancies>.
+

@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     LLM_MAX_CONTEXT_CHARACTERS: int | None = None
 
     VACANCY_ANALYSIS_BATCH_LIMIT: int = Field(default=5, ge=1, le=20)
-    VACANCY_ANALYSIS_PROMPT_VERSION: str = "vacancy-fit-v3"
+    VACANCY_ANALYSIS_PROMPT_VERSION: str = "vacancy-fit-v4"
 
     # Career assets (private documents, never committed)
     MASTER_CAREER_BRIEF_PATH: str | None = None

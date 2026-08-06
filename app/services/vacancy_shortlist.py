@@ -156,8 +156,8 @@ def get_vacancy_shortlist(
     ]
 
 
-def classify_shortlist_item(item: VacancyShortlistItem) -> str:
-    """Return a deterministic human-review category for a shortlist item.
+def classify_scores(recommendation: str, overall_score: int, location_score: int) -> str:
+    """Deterministic human-review category from raw scores (shared logic).
 
     Rules:
     - PRIORITY: strong_match, overall >= 75, and location >= 40.
@@ -167,28 +167,29 @@ def classify_shortlist_item(item: VacancyShortlistItem) -> str:
     - LOW_PRIORITY: weak_match, or overall from 40 through 59.
     - REJECT: recommendation reject, or overall < 40.
     """
-    recommendation = item.recommendation
-    overall = item.overall_score
-    location = item.location_score
-
-    if recommendation == "reject" or overall < 40:
+    if recommendation == "reject" or overall_score < 40:
         return REJECT
 
-    if recommendation == "strong_match" and overall >= 75 and location >= 40:
+    if recommendation == "strong_match" and overall_score >= 75 and location_score >= 40:
         return PRIORITY
 
     if (
-        recommendation in ("strong_match", "consider") and overall >= 60
-    ) or (overall >= 75 and location < 40):
+        recommendation in ("strong_match", "consider") and overall_score >= 60
+    ) or (overall_score >= 75 and location_score < 40):
         return REVIEW
 
-    if recommendation == "weak_match" or 40 <= overall <= 59:
+    if recommendation == "weak_match" or 40 <= overall_score <= 59:
         return LOW_PRIORITY
 
     # Fallback for unexpected recommendation values / edge combinations.
-    if overall >= 60:
+    if overall_score >= 60:
         return REVIEW
     return LOW_PRIORITY
+
+
+def classify_shortlist_item(item: VacancyShortlistItem) -> str:
+    """Return a deterministic human-review category for a shortlist item."""
+    return classify_scores(item.recommendation, item.overall_score, item.location_score)
 
 
 def compact_summary(summary: str, maximum_characters: int = 500) -> str:

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Statera — {{ detail.title }}{% endblock %}
+{% block content %}
+<nav class="detail-nav" aria-label="Навигация по вакансии">
+  <a class="btn btn-link" href="/vacancies">Вернуться к списку вакансий</a>
+  <a class="btn btn-link" href="{{ detail.source_url }}" target="_blank" rel="noopener">Открыть в LinkedIn</a>
+</nav>
+
+<article class="detail">
+  <header class="detail-header">
+    <h1>{{ detail.title }}</h1>
+    <div class="detail-badges">
+      <span class="category-badge category-{{ detail.category|lower }}" data-category="{{ detail.category }}">{{ category_label(detail.category) }}</span>
+      {% set status = detail.status %}
+      {% include "vacancies/_status_badge.html" %}
+    </div>
+    <div class="detail-meta">
+      <span>{{ detail.company or "Компания не указана" }}</span>
+      <span>{{ detail.location or "Местоположение не указано" }}</span>
+    </div>
+  </header>
+
+  <section class="detail-scores" aria-label="Оценки">
+    <div class="overall-score" title="{{ overall_score_label }}">
+      <span class="score-num">{{ detail.overall_score }}</span>
+      <span class="score-label">{{ overall_score_compact_label }}</span>
+    </div>
+    <span class="score-pill" title="{{ technical_score_label }}">{{ detail.technical_score }} {{ technical_score_compact_label }}</span>
+    <span class="score-pill" title="{{ leadership_score_label }}">{{ detail.leadership_score }} {{ leadership_score_compact_label }}</span>
+    <span class="score-pill eligibility" title="{{ location_score_label }}">{{ detail.location_score }} {{ location_score_compact_label }}</span>
+    {% include "vacancies/_location_help.html" %}
+  </section>
+
+  <p class="detail-recommendation">Рекомендация: <strong data-recommendation="{{ detail.recommendation }}">{{ recommendation_label(detail.recommendation) }}</strong></p>
+
+  <section class="detail-summary">
+    <h2>Сводка</h2>
+    <p>{{ detail.summary }}</p>
+  </section>
+
+  <section class="detail-lists">
+    <div class="strengths">
+      <h2>Сильные стороны</h2>
+      <ul>{% for strength in detail.strengths %}<li>{{ strength }}</li>{% endfor %}</ul>
+    </div>
+    <div class="weaknesses">
+      <h2>Основные пробелы</h2>
+      <ul>{% for weakness in detail.weaknesses %}<li>{{ weakness }}</li>{% endfor %}</ul>
+    </div>
+    <div class="risks">
+      <h2>Риски</h2>
+      <ul>{% for risk in detail.risks %}<li>{{ risk }}</li>{% endfor %}</ul>
+    </div>
+  </section>
+
+  <section class="detail-jd">
+    <details>
+      <summary>Описание вакансии ({{ detail.description_length }} символов)</summary>
+      <div class="jd-body">{{ detail.jd_text }}</div>
+    </details>
+  </section>
+
+  <section class="detail-actions" aria-label="Действия со статусом">
+    {% for action, target_status in valid_actions(detail.status) %}
+    <form method="post" action="/vacancies/{{ detail.external_id }}/status" class="inline-form"
+      {% if target_status == 'applied' %}
+      data-confirm="{{ applied_confirm_message }}"
+      {% endif %}>
+      <input type="hidden" name="status" value="{{ target_status }}">
+      <input type="hidden" name="return_to" value="/vacancies/{{ detail.external_id }}">
+      <button type="submit" class="btn {{ 'btn-primary' if target_status != 'ignored' else 'btn-secondary' }}">{{ action }}</button>
+    </form>
+    {% endfor %}
+  </section>
+
+  <section class="detail-metadata" aria-label="Метаданные анализа">
+    <dl>
+      <dt>Модель</dt><dd>{{ detail.model }}</dd>
+      <dt>Версия промпта</dt><dd>{{ detail.prompt_version }}</dd>
+      <dt>Время анализа</dt>
+      <dd>{% if detail.analysis_created_at %}{{ detail.analysis_created_at.strftime('%Y-%m-%d %H:%M') }}{% endif %}</dd>
+      <dt>Впервые замечено</dt>
+      <dd>{% if detail.first_seen_at %}{{ detail.first_seen_at.strftime('%Y-%m-%d') }}{% endif %}</dd>
+    </dl>
+  </section>
+</article>
+{% endblock %}

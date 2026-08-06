@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Statera — Вакансии{% endblock %}
+{% block content %}
+<section class="filters" aria-label="Фильтры">
+  <form method="get" action="/vacancies">
+    <input type="hidden" name="status" value="{{ current_status }}">
+    <label>Категория
+      <select name="category">
+        <option value="">Все</option>
+        {% for category in categories %}
+        <option value="{{ category }}" {% if current_category == category %}selected{% endif %}>{{ category_label(category) }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Рекомендация
+      <select name="recommendation">
+        <option value="">Все</option>
+        {% for recommendation in recommendations %}
+        <option value="{{ recommendation }}" {% if current_recommendation == recommendation %}selected{% endif %}>{{ recommendation_label(recommendation) }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Мин. общий балл
+      <input type="number" name="min_score" min="0" max="100" value="{{ current_min_score or '' }}">
+    </label>
+    <label>Сортировка
+      <select name="sort">
+        {% for sort in sorts %}
+        <option value="{{ sort }}" {% if current_sort == sort %}selected{% endif %}>{{ sort_label(sort) }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>На странице
+      <select name="page_size">
+        {% for size in (10, 20, 50, 100) %}
+        <option value="{{ size }}" {% if current_page_size == size %}selected{% endif %}>{{ size }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="btn btn-primary">Применить фильтры</button>
+  </form>
+</section>
+
+<nav class="tabs" aria-label="Статусы">
+  {% set tabs = [
+    ('new', status_label('new')),
+    ('selected', status_label('selected')),
+    ('ignored', status_label('ignored')),
+    ('applied', status_label('applied')),
+    ('all', 'Все')
+  ] %}
+  {% for value, label in tabs %}
+  <a class="tab {% if current_status == value %}active{% endif %}" href="/vacancies?status={{ value }}">{{ label }}</a>
+  {% endfor %}
+</nav>
+
+{% if page.items %}
+<div class="vacancy-list">
+  {% for item in page.items %}
+    {% include "vacancies/_card.html" %}
+  {% endfor %}
+</div>
+{% else %}
+  {% include "vacancies/_empty.html" %}
+{% endif %}
+
+<nav class="pagination" aria-label="Постраничная навигация">
+  {% if page.page > 1 %}
+  <a class="btn btn-secondary" href="{{ page_url(page.page - 1) }}">Предыдущая</a>
+  {% endif %}
+  <span class="page-info">Страница {{ page.page }} из {{ page.total_pages }}</span>
+  {% if page.page < page.total_pages %}
+  <a class="btn btn-secondary" href="{{ page_url(page.page + 1) }}">Следующая</a>
+  {% endif %}
+</nav>
+{% endblock %}
